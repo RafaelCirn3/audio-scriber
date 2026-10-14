@@ -1,7 +1,7 @@
 """Serviço de transcrição desacoplado da interface gráfica."""
 from pathlib import Path
 
-SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".mp4", ".mov"}
+SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".mp4", ".mov", ".webm"}
 MODELS = ("tiny", "base", "small", "medium")
 LANGUAGES = {"Automático": None, "Português": "pt", "English": "en", "Español": "es"}
 
@@ -11,7 +11,7 @@ def validate_audio(path: str | Path) -> Path:
     if not audio.is_file():
         raise FileNotFoundError("O arquivo de áudio não existe.")
     if audio.suffix.lower() not in SUPPORTED_EXTENSIONS:
-        raise ValueError("Formato não suportado. Use WAV, MP3, M4A, AAC, OGG, OPUS, FLAC, MP4 ou MOV.")
+        raise ValueError("Formato não suportado. Use WAV, MP3, M4A, AAC, OGG, OPUS, FLAC, MP4, MOV ou WEBM.")
     if audio.stat().st_size == 0:
         raise ValueError("O arquivo está vazio.")
     return audio
