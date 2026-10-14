@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -41,3 +41,22 @@ jobs:
           path: Android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
+
+      - name: Prepare downloadable APK
+        run: |
+          cp Android/app/build/outputs/apk/debug/app-debug.apk AudioScriber-Android-beta.apk
+          sha256sum AudioScriber-Android-beta.apk > AudioScriber-Android-beta.apk.sha256
+      - name: Publish standalone APK via GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="v0.1.0-beta"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" AudioScriber-Android-beta.apk AudioScriber-Android-beta.apk.sha256 --clobber
+          else
+            gh release create "$TAG" AudioScriber-Android-beta.apk AudioScriber-Android-beta.apk.sha256 \
+              --title "Audio Scriber Android v0.1.0-beta" \
+              --notes "APK Android instalável diretamente no tablet. Versão de testes assinada com chave de depuração do GitHub Actions. A primeira transcrição requer download do modelo de português. Ainda não validada em tablet físico." \
+              --prerelease --target "$GITHUB_SHA"
+          fi
