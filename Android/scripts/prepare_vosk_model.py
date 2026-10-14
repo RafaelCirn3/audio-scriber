@@ -44,13 +44,26 @@ def prepare(source: Path, destination: Path) -> None:
         config = locate("model.conf")
         if config:
             mapping[config] = "conf/model.conf"
+        phones_entry = locate("phones.txt")
+        if not phones_entry:
+            raise ValueError("Cannot determine silence phones: phones.txt missing")
+        silence_ids = []
+        for line in archive.read(phones_entry).decode("utf-8").splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                name = parts[0].split("_")[0].lower()
+                if name in {"sil", "spn", "nsn", "noise", "laugh", "unk"}:
+                    silence_ids.append(parts[1])
+        if not silence_ids:
+            raise ValueError("No silence phone IDs found in phones.txt")
+        silence_option = "--endpoint.silence-phones=" + ":".join(dict.fromkeys(silence_ids))
         destination.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as output:
             for original, normalized in sorted(mapping.items()):
                 output.writestr("vosk-model-small-pt-0.3/" + normalized, archive.read(original))
             if not config:
                 output.writestr("vosk-model-small-pt-0.3/conf/model.conf",
-                                "--beam=10.0\n--max-active=3000\n--lattice-beam=2.0\n")
+                                "--beam=10.0\n--max-active=3000\n--lattice-beam=2.0\n" + silence_option + "\n")
     with zipfile.ZipFile(destination) as verify:
         names = set(verify.namelist())
         base = "vosk-model-small-pt-0.3/"
