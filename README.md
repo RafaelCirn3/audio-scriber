@@ -1,64 +1,83 @@
 # Audio Scriber
 
-Aplicativo desktop para Windows, em Python + Tkinter, que grava áudio pelo microfone ou importa um arquivo de áudio e gera uma transcrição `.txt` com faster-whisper.
+Transcrição de áudio para texto com Whisper. O repositório tem duas interfaces independentes, com **transcrição processada em CPU**:
 
-## Instalação
+- **[Wind/](Wind/)**: aplicativo desktop Tkinter no Windows, com captura do microfone, importação de áudio, exportação .txt, build PyInstaller e atalho na Área de Trabalho.
+- **[Android/](Android/)**: aplicação web responsiva para celulares e tablets Android (PWA experimental), com gravação pelo navegador quando hospedada em HTTPS, importação de áudio e download .txt. **Não é um APK** e requer computador/servidor para processar a transcrição.
 
-No PowerShell (Python 3.11 ou 3.12 recomendado):
+## Windows desktop
+
+No PowerShell, na raiz do repositório:
 
 ```powershell
-git clone https://github.com/RafaelCirn3/audio-scriber.git
-cd audio-scriber
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python app.py
+cd Wind
+py -m pip install -r requirements.txt
+py app.py
 ```
 
-Se o PowerShell bloquear a ativação, execute `\.venv\Scripts\python.exe app.py` e utilize esse Python para instalar os requisitos.
+Para compilar o executável e criar o atalho na Área de Trabalho:
 
-## Utilização
+```powershell
+cd Wind
+.\build_windows.bat
+```
 
-1. Clique em **Grave um áudio** e permita o uso do microfone. Clique em **Parar gravação** quando terminar; ou clique em **Envie um áudio** e selecione um arquivo compatível.
-2. Se desejar, ajuste o modelo e o idioma. Clique em **Transcrever áudio**.
-3. Ao concluir, visualize o texto e escolha onde salvar o `.txt` na janela do Windows. Se cancelar a janela, poderá clicar em **Salvar .txt** depois.
+O executável ficará em `Wind\dist\AudioScriber\AudioScriber.exe`. Não mova a pasta `dist\AudioScriber` após gerar o atalho. A compilação precisa ser realizada no Windows.
 
-O download do modelo na primeira utilização exige internet. Depois que o modelo estiver em cache, a inferência é local e não envia os áudios para serviços externos. O tempo de processamento depende do hardware e da duração do arquivo.
+## Android: primeiro teste na rede Wi-Fi
 
-Formatos importados: WAV, MP3, M4A, AAC, OGG, OPUS, FLAC, MP4 e MOV. O decodificador PyAV acompanha o faster-whisper; não é necessária instalação independente do FFmpeg para os formatos que ele suportar.
+1. Deixe computador e Android na **mesma rede Wi-Fi**, em uma rede confiável.
+2. No Windows, na raiz do repositório, execute `Android\start_server.bat`. Ele instala as dependências e inicia o serviço na porta 8765.
+3. Verifique o **IPv4 do computador** exibido pelo script (ex.: `192.168.1.20`).
+4. No Chrome do Android, abra `http://192.168.1.20:8765` (substitua pelo seu IP).
+5. Toque em **Envie um áudio** e escolha uma gravação do celular. Toque em **Transcrever áudio** e depois em **Baixar .txt**.
 
-## Modelos
+**Atenção ao microfone:** o navegador Android exige HTTPS (contexto seguro) para `getUserMedia`. Por isso, em acesso HTTP ao IP local, a gravação direta pelo botão **Grave um áudio** fica indisponível. Grave pelo gravador do telefone e use **Envie um áudio**. Para liberar a gravação diretamente no navegador, implante a aplicação atrás de um endpoint **HTTPS** com certificado válido e autenticação. A UI já implementa a captura via MediaRecorder nos navegadores compatíveis.
 
-- `tiny`: mais leve; menor precisão.
-- `base`: intermediário leve.
-- `small` (padrão): equilíbrio entre qualidade e custo.
-- `medium`: maior demanda de CPU/memória.
+**Instalação na tela inicial:** no Chrome Android, abra a versão hospedada em HTTPS e use o menu ⋮ → **Instalar app** ou **Adicionar à tela inicial** (a oferta de instalação varia conforme o navegador e a compatibilidade do manifesto).
 
-A configuração padrão usa CPU com quantização `int8`, priorizando computadores Windows sem GPU dedicada. O reconhecimento automático de idioma é o padrão; também há português, inglês e espanhol.
+**Segurança e privacidade:** esta primeira versão não tem login. O script abre o serviço para a rede local e qualquer dispositivo que alcance a porta poderá enviar áudios para processamento. **Não publique a porta 8765 diretamente na internet**, nem use em rede não confiável. Para uso real com clientes, adicione autenticação, HTTPS, limites por usuário, observabilidade e política de retenção. O servidor recebe temporariamente o arquivo enviado, faz a inferência localmente e remove o arquivo temporário ao concluir; os textos retornam ao navegador. A rede HTTP local não é criptografada.
 
-## Compilação para Windows
+O arquivo aceito tem até 75 MB. Transcrições são processadas uma de cada vez para proteger a memória da máquina. O modelo é baixado na primeira utilização (requer internet).
 
-No Windows, execute `build_windows.bat`. O script instala as dependências, gera `assets\audio_scriber.ico`, compila `dist\AudioScriber\AudioScriber.exe` com o ícone embutido e cria automaticamente o atalho **Audio Scriber** na Área de Trabalho do usuário (somente após a compilação terminar com sucesso). O atalho aponta para o executável na pasta `dist`: não mova ou exclua essa pasta. Em caso de falha ao criar o atalho, o script informa o caminho do executável. A primeira transcrição ainda baixa o modelo escolhido; é necessário acesso à internet no primeiro uso.
+## Android: iniciar manualmente
 
-**Nota:** build e teste do executável precisam ser realizados em Windows. A publicação do código-fonte não significa que um instalador ou `.exe` já foi compilado e validado.
+A partir da raiz do repositório:
+
+```powershell
+py -m pip install -r Android\requirements.txt
+py -m uvicorn Android.server:app --host 0.0.0.0 --port 8765
+```
+
+O navegador Android é apenas a interface: é necessário manter o servidor ligado. Não há processamento on-device nem aplicativo APK nesta etapa.
 
 ## Estrutura
 
-- `app.py`: interface e fluxo de gravação/transcrição.
-- `audio_scriber/transcription.py`: integração com Whisper, independente da GUI.
-- `audio_scriber/recording.py`: captura WAV pelo microfone.
-- `requirements.txt`: bibliotecas necessárias.
-- `build_windows.bat`: empacotamento nativo e criação do atalho na Área de Trabalho.\n- `generate_icon.py`: gera o ícone Windows `.ico` em múltiplas resoluções.\n- `scripts/create_shortcut.ps1`: cria um atalho Windows `.lnk` com ícone do executável.
-- `tests/`: testes automatizados das operações sem precisar baixar modelos.
+```text
+audio-scriber/
+├── Wind/
+│   ├── app.py
+│   ├── audio_scriber/
+│   ├── build_windows.bat
+│   ├── generate_icon.py
+│   ├── scripts/create_shortcut.ps1
+│   └── tests/
+└── Android/
+    ├── server.py
+    ├── start_server.bat
+    ├── requirements.txt
+    └── static/
+        ├── index.html
+        ├── style.css
+        ├── app.js
+        ├── manifest.webmanifest
+        └── icon.svg
+```
 
-## Limitações do MVP
+## Limitações
 
-- Uma transcrição por vez, sem diarização de locutores.
-- Os modelos são baixados sob demanda; não estão versionados no GitHub.
-- A interface é local. Não se trata de cópia de código, APIs privadas ou marca do TurboScribe.
-- A caixa de diálogo **Salvar como** representa o 'download' para o disco no contexto de uma aplicação nativa.
-
-## Referências
-
-- [TurboScribe — funcionalidades públicas](https://turboscribe.com/)
-- [faster-whisper — implementação open source](https://github.com/SYSTRAN/faster-whisper)
+- MVP ainda sem testes em dispositivos Android físicos ou build Windows verificado.
+- Android via browser, sem APK; instalação tipo PWA depende do navegador/HTTPS.
+- Não há diarização de locutores nem contas de usuário.
+- Modelo `small` padrão; desempenho varia conforme CPU, duração e áudio.
+- Implementação independente do código proprietário do TurboScribe.
