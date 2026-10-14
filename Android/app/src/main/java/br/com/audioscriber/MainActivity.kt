@@ -26,8 +26,10 @@ class MainActivity : Activity() {
     private var importedUri: android.net.Uri? = null
     private var busy = false
     private val diagnostics by lazy { getSharedPreferences("transcription_diagnostics", MODE_PRIVATE) }
+    private val crashLog by lazy { Diagnostics(this) }
     private fun stage(value: String) {
         diagnostics.edit().putString("last_stage", value).putBoolean("unfinished", true).commit()
+        crashLog.record(value)
         message(value)
     }
     private lateinit var recordButton: Button
@@ -69,6 +71,11 @@ class MainActivity : Activity() {
         saveButton = button("Salvar .txt") { saveText() }.apply { isEnabled = false }
         column.addView(transcribeButton)
         column.addView(saveButton)
+        column.addView(button("Copiar diagnóstico") {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Audio Scriber diagnostics", crashLog.report()))
+            message("Diagnóstico copiado. Envie o texto ao desenvolvedor.")
+        })
         column.addView(TextView(this).apply {
             text = "Transcrição"; textSize = 19f; setPadding(0, dp(20), 0, dp(6))
         })
@@ -218,6 +225,7 @@ class MainActivity : Activity() {
                 stage("Preparando modelo offline")
                 val model = ModelManager(this).ensureModel(::stage)
                 val engine = SpeechEngine(this)
+                crashLog.record("Transcription started; heapUsedMB=" + ((Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024 * 1024)))
                 val text = if (sourceFile != null) {
                     engine.transcribeRecording(model, sourceFile, ::stage)
                 } else {
