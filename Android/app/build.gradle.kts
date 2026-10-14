@@ -10,8 +10,8 @@ android {
         applicationId = "br.com.audioscriber"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.6-beta"
+        versionCode = 8
+        versionName = "0.1.7-beta"
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
