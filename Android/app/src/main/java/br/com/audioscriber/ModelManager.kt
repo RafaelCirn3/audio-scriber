@@ -12,6 +12,7 @@ import java.util.zip.ZipInputStream
 class ModelManager(private val context: Context) {
     companion object {
         private const val NAME = "vosk-model-small-pt-0.3"
+        private const val MODEL_REVISION = "endpoint-silence-v2"
         private const val ASSET = "vosk-model-small-pt-0.3.zip"
         private const val MAX_UNPACKED = 350L * 1024 * 1024
     }
@@ -26,7 +27,7 @@ class ModelManager(private val context: Context) {
         val folder = File(context.filesDir, "models")
         val model = File(folder, NAME)
         val marker = File(model, ".ready")
-        if (marker.isFile && missing(model).isEmpty()) return model
+        if (marker.isFile && marker.readText().trim() == MODEL_REVISION && missing(model).isEmpty()) return model
 
         check(folder.exists() || folder.mkdirs()) { "Não foi possível criar pasta de modelos" }
         val free = StatFs(folder.absolutePath).availableBytes
@@ -81,7 +82,7 @@ class ModelManager(private val context: Context) {
             check(candidate.renameTo(replacement)) { "Falha ao preparar modelo" }
             model.deleteRecursively()
             check(replacement.renameTo(model)) { "Falha ao instalar modelo" }
-            check(File(model, ".ready").createNewFile()) { "Falha ao registrar instalação" }
+            File(model, ".ready").writeText(MODEL_REVISION)
             return model
         } finally {
             temp.deleteRecursively()
