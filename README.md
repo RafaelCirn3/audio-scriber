@@ -38,7 +38,7 @@ A configuração padrão usa CPU com quantização `int8`, priorizando computado
 
 ## Compilação para Windows
 
-No Windows, execute `build_windows.bat`. O script instala PyInstaller e gera `dist\AudioScriber\AudioScriber.exe` (pacote em pasta), incluindo os binários Python. A primeira transcrição ainda baixa o modelo escolhido; é necessário acesso à internet no primeiro uso.
+No Windows, execute `build_windows.bat`. O script instala as dependências, gera `assets\audio_scriber.ico`, compila `dist\AudioScriber\AudioScriber.exe` com o ícone embutido e cria automaticamente o atalho **Audio Scriber** na Área de Trabalho do usuário (somente após a compilação terminar com sucesso). O atalho aponta para o executável na pasta `dist`: não mova ou exclua essa pasta. Em caso de falha ao criar o atalho, o script informa o caminho do executável. A primeira transcrição ainda baixa o modelo escolhido; é necessário acesso à internet no primeiro uso.
 
 **Nota:** build e teste do executável precisam ser realizados em Windows. A publicação do código-fonte não significa que um instalador ou `.exe` já foi compilado e validado.
 
@@ -48,7 +48,7 @@ No Windows, execute `build_windows.bat`. O script instala PyInstaller e gera `di
 - `audio_scriber/transcription.py`: integração com Whisper, independente da GUI.
 - `audio_scriber/recording.py`: captura WAV pelo microfone.
 - `requirements.txt`: bibliotecas necessárias.
-- `build_windows.bat`: empacotamento nativo.
+- `build_windows.bat`: empacotamento nativo e criação do atalho na Área de Trabalho.\n- `generate_icon.py`: gera o ícone Windows `.ico` em múltiplas resoluções.\n- `scripts/create_shortcut.ps1`: cria um atalho Windows `.lnk` com ícone do executável.
 - `tests/`: testes automatizados das operações sem precisar baixar modelos.
 
 ## Limitações do MVP
