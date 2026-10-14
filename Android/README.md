@@ -1,41 +1,24 @@
-# Audio Scriber para Android — aplicativo nativo Kotlin
+# Audio Scriber Android — instalação direta no tablet
 
-Este diretório contém um **projeto Android Studio**, sem necessidade de Chrome, FastAPI, Python, computador ligado ou servidor. A biblioteca [Vosk Android](https://central.sonatype.com/artifact/com.alphacephei/vosk-android/0.3.47) executa reconhecimento de fala **no dispositivo**.
+## Cliente: instalar sem computador
 
-## Como compilar e instalar no tablet
+1. No tablet Android, abra o link público: https://github.com/RafaelCirn3/audio-scriber/releases/latest (quando houver release estável) ou https://github.com/RafaelCirn3/audio-scriber/releases/tag/v0.1.0-beta para a versão de testes.
+2. Em **Assets**, toque em **AudioScriber-Android-beta.apk** (não é preciso baixar ZIP nem abrir GitHub Actions).
+3. Abra o download do APK e autorize a instalação desta fonte nas configurações Android, se solicitado.
+4. Toque em **Instalar** e abra o ícone Audio Scriber. Conceda acesso ao microfone para gravar.
+5. A primeira transcrição baixa o modelo de português; depois o reconhecimento acontece no próprio tablet, mesmo offline.
 
-1. Instale o Android Studio com SDK Android 35 e JDK 17.
-2. Abra **Open > selecione a pasta `Android/`**.
-3. Aguarde a sincronização Gradle com conexão à internet.
-4. Conecte o tablet Android por USB e ative a depuração USB, ou gere o APK no Android Studio com **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
-5. Instale o APK no dispositivo. O arquivo de depuração geralmente fica em `Android/app/build/outputs/apk/debug/app-debug.apk`.
-6. Abra **Audio Scriber**. Toque em **Grave um áudio** (permissão de microfone) ou **Envie um áudio** (seletor de arquivos).
-7. Toque em **Transcrever áudio**. Na primeira vez, o aplicativo baixará automaticamente o modelo português (aproximadamente 31 MB) e o guardará em armazenamento privado do aplicativo.
-8. Após a transcrição, toque em **Salvar .txt**, escolha a pasta/nome no Android e confirme.
+**Não é necessário PC, navegador durante o uso, nem servidor.** O navegador só é usado para baixar o instalador uma única vez.
 
-O modelo permanece instalado e permite transcrição **sem internet** nas utilizações seguintes. O áudio e o texto permanecem no dispositivo, sem upload a serviços externos.
+**Atenção:** a versão `v0.1.0-beta` é de testes e usa assinatura automática de depuração do GitHub Actions, não uma assinatura permanente de distribuição. Atualizações futuras podem exigir desinstalar antes de instalar outra compilação, perdendo dados locais. Não entregue como versão de produção antes de assinar com uma chave de release própria e validar microfone, formatos, modelo offline e exportação em tablet real.
 
-## Tecnologias
+## Desenvolvimento
 
-- Kotlin / Android SDK 35, Android 8.0+ (API 26)
-- `AudioRecord` captura PCM mono 16kHz
-- `ACTION_OPEN_DOCUMENT` e `MediaExtractor`/`MediaCodec` importam e decodificam arquivos de áudio compatíveis com o dispositivo
-- Conversão de áudio PCM para mono 16kHz e reconhecimento via Vosk
-- `ACTION_CREATE_DOCUMENT` exporta TXT UTF-8
-- Modelo: `vosk-model-small-pt-0.3`, baixado de https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip, com verificação SHA-256 antes da extração
+Abra este diretório como projeto no Android Studio (JDK 17; SDK 35). A compilação via GitHub Actions gera APK e publica na página Releases. O aplicativo é Kotlin/Android SDK e usa Vosk para reconhecimento de português.
 
-## Restrições
+## Limitações
 
-- Limite atual de 15 minutos por áudio. Áudios longos consomem bastante memória; recomenda-se otimização em streaming para produção.
-- Apenas português neste MVP.
-- O aplicativo precisa permanecer aberto durante a gravação e a transcrição. Uma implementação com serviço de primeiro plano será necessária para transcrições em background.
-- Sem diarização e sem pontuação refinada. Vosk não é Whisper; qualidade e tempo de processamento variam.
-- APK ainda não validado em um dispositivo real. É necessário testar comportamento de permissões, compatibilidade dos codecs e instalação do modelo.
-
-## Arquivos legados
-
-`server.py`, `static/` e `start_server.bat` são remanescentes do protótipo via navegador; **não são utilizados** pela aplicação Kotlin/Gradle.
-
-## Build de linha de comando
-
-Com Android SDK e Gradle adequadamente instalados, abra `Android/` e execute `gradle assembleDebug`. O projeto não possui wrapper Gradle versionado; a via recomendada inicialmente é o Android Studio.
+- Máximo de 15 minutos por gravação/importação no MVP.
+- Uma transcrição por vez, em primeiro plano.
+- Sem diarização e sem modelos adicionais neste momento.
+- `server.py`, `static/` e `start_server.bat` são componentes web legados e não são usados pelo aplicativo Android nativo.
