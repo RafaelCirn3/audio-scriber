@@ -223,6 +223,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     message("Erro: " + exc.message)
                     busy = false
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     refresh()
                 }
             }
