@@ -16,14 +16,20 @@ class ModelManager(private val context: Context) {
         private const val MAX_UNPACKED = 350L * 1024 * 1024
     }
 
+    private fun validModel(dir: File): Boolean =
+        File(dir, "am/final.mdl").isFile &&
+        File(dir, "conf/model.conf").isFile &&
+        File(dir, "graph").isDirectory
+
     fun ensureModel(progress: (String) -> Unit): File {
         val folder = File(context.filesDir, "models")
         val model = File(folder, NAME)
         val marker = File(model, ".ready")
-        if (marker.exists()) return model
+        if (marker.exists() && validModel(model)) return model
+        if (model.exists()) model.deleteRecursively()
         folder.mkdirs()
         val availableBytes = android.os.StatFs(folder.absolutePath).availableBytes
-        check(availableBytes >= 160L * 1024 * 1024) { "Espaço insuficiente. Libere pelo menos 160 MB para o modelo offline." }
+        check(availableBytes >= 400L * 1024 * 1024) { "Espaço insuficiente. Libere pelo menos 400 MB para o modelo offline." }
         val zipFile = File(context.cacheDir, "$NAME.zip")
         val tempDir = File(folder, "tmp")
         tempDir.deleteRecursively()
@@ -74,8 +80,8 @@ class ModelManager(private val context: Context) {
                     zip.closeEntry()
                 }
             }
-            val extracted = File(tempDir, NAME)
-            check(extracted.isDirectory && File(extracted, "am").isDirectory) { "Pacote do modelo inválido" }
+            val extracted = tempDir.walkTopDown().firstOrNull { it.isDirectory && validModel(it) }
+                ?: error("Pacote do modelo inválido: estrutura Vosk não encontrada")
             model.deleteRecursively()
             check(extracted.renameTo(model)) { "Falha ao instalar modelo" }
             check(marker.createNewFile()) { "Falha ao finalizar instalação" }
