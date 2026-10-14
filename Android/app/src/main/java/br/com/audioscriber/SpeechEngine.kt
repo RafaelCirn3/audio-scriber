@@ -35,6 +35,39 @@ class SpeechEngine(private val context: Context) {
         return parts.joinToString(" ")
     }
 
+    /**
+     * Stream raw 16 kHz mono PCM to Vosk. Avoids allocating the full recording
+     * as ByteArray + ShortArray (important on low-memory Android devices).
+     */
+    fun transcribeRecording(modelDir: File, file: File, progress: (String) -> Unit): String {
+        check(file.length() in 2..(16000L * 2 * 60 * 15)) {
+            "Gravação vazia ou acima de 15 minutos"
+        }
+        val parts = mutableListOf<String>()
+        progress("Carregando modelo de português...")
+        Model(modelDir.absolutePath).use { model ->
+            progress("Inicializando reconhecimento...")
+            Recognizer(model, rate.toFloat()).use { recognizer ->
+                progress("Transcrevendo gravação...")
+                file.inputStream().buffered().use { input ->
+                    val bytes = ByteArray(8192)
+                    while (true) {
+                        val n = input.read(bytes)
+                        if (n < 0) break
+                        val usable = n - (n % 2)
+                        if (usable > 0 && recognizer.acceptWaveForm(bytes, usable)) {
+                            val text = JSONObject(recognizer.result).optString("text").trim()
+                            if (text.isNotEmpty()) parts.add(text)
+                        }
+                    }
+                }
+                val text = JSONObject(recognizer.finalResult).optString("text").trim()
+                if (text.isNotEmpty()) parts.add(text)
+            }
+        }
+        return parts.joinToString(" ")
+    }
+
     fun readRecording(file: File): ShortArray {
         check(file.length() in 2..(16000L * 2 * 60 * 15)) { "Gravação vazia ou acima de 15 minutos" }
         val pcm = ByteBuffer.wrap(file.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
