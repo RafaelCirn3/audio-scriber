@@ -44,6 +44,8 @@ class SpeechEngine(private val context: Context) {
             "Gravação vazia ou acima de 15 minutos"
         }
         val parts = mutableListOf<String>()
+        val diagnostics = Diagnostics(context)
+        diagnostics.record("Recording bytes=${file.length()} durationSec=${file.length() / 32000.0}")
         progress("Carregando modelo de português...")
         Model(modelDir.absolutePath).use { model ->
             progress("Inicializando reconhecimento...")
@@ -51,18 +53,40 @@ class SpeechEngine(private val context: Context) {
                 progress("Transcrevendo gravação...")
                 file.inputStream().buffered().use { input ->
                     val bytes = ByteArray(8192)
+                    var chunks = 0
+                    var peak = 0
+                    var active = 0L
+                    var totalSamples = 0L
                     while (true) {
                         val n = input.read(bytes)
                         if (n < 0) break
                         val usable = n - (n % 2)
-                        if (usable > 0 && recognizer.acceptWaveForm(bytes, usable)) {
+                        if (usable > 0) {
+                            var i = 0
+                            while (i + 1 < usable) {
+                                val value = (bytes[i].toInt() and 255) or (bytes[i + 1].toInt() shl 8)
+                                val sample = value.toShort().toInt()
+                                peak = maxOf(peak, kotlin.math.abs(sample))
+                                if (kotlin.math.abs(sample) > 400) active++
+                                totalSamples++
+                                i += 2
+                            }
+                            chunks++
+                            if (chunks == 1 || chunks % 20 == 0) diagnostics.record("Before Vosk chunk=$chunks bytes=$usable peak=$peak activeSamples=$active/$totalSamples nativeHeapMB=${android.os.Debug.getNativeHeapAllocatedSize() / 1048576}")
+                            val completed = recognizer.acceptWaveForm(bytes, usable)
+                            if (chunks == 1 || chunks % 20 == 0) diagnostics.record("After Vosk chunk=$chunks")
+                            if (completed) {
                             val text = JSONObject(recognizer.result).optString("text").trim()
                             if (text.isNotEmpty()) parts.add(text)
+                            }
                         }
                     }
                 }
+                diagnostics.record("Before Vosk finalResult chunks=$chunks peak=$peak activeSamples=$active/$totalSamples")
                 val text = JSONObject(recognizer.finalResult).optString("text").trim()
                 if (text.isNotEmpty()) parts.add(text)
+                diagnostics.record("After Vosk finalResult chars=${parts.joinToString(" ").length}")
+                if (parts.isEmpty()) diagnostics.record("No speech recognized; peak=$peak activeSamples=$active/$totalSamples")
             }
         }
         return parts.joinToString(" ")
