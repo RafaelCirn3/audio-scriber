@@ -30,6 +30,32 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Bundle verified Portuguese Vosk model into APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Android/app/src/main/assets
+          MODEL="Android/app/src/main/assets/vosk-model-small-pt-0.3.zip"
+          curl --fail --location --retry 4 --connect-timeout 20 --max-time 300 \
+            "https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip" -o "$MODEL"
+          echo "6e1ce909032e1afa7a88e68a3d628ecafff302bdf195befab308826c395e93b7  $MODEL" | sha256sum -c -
+          unzip -t "$MODEL" >/dev/null
+          python3 - "$MODEL" <<'PY'
+          import sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              names = set(z.namelist())
+              roots = {n.split('/am/final.mdl')[0] for n in names if n.endswith('/am/final.mdl')}
+              if not roots:
+                  raise SystemExit("Missing am/final.mdl in Vosk model")
+              for root in roots:
+                  prefix = root + '/' if root else ''
+                  required = [prefix + 'am/final.mdl', prefix + 'conf/mfcc.conf']
+                  if all(name in names for name in required) and any(name.startswith(prefix + 'graph/') for name in names):
+                      print("Verified Vosk model root:", root)
+                      break
+              else:
+                  raise SystemExit("Missing essential Vosk model files")
+          PY
       - name: Compile APK
         working-directory: Android
         run: gradle --no-daemon --stacktrace assembleDebug
@@ -51,12 +77,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          TAG="v0.1.2-beta"
+          TAG="v0.1.3-beta"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" AudioScriber-Android-beta.apk AudioScriber-Android-beta.apk.sha256 --clobber
           else
             gh release create "$TAG" AudioScriber-Android-beta.apk AudioScriber-Android-beta.apk.sha256 \
-              --title "Audio Scriber Android v0.1.2-beta" \
+              --title "Audio Scriber Android v0.1.3-beta" \
               --notes "APK Android instalável diretamente no tablet. Versão de testes assinada com chave de depuração do GitHub Actions. A primeira transcrição requer download do modelo de português. Ainda não validada em tablet físico." \
               --prerelease --target "$GITHUB_SHA"
           fi
