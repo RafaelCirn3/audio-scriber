@@ -46,6 +46,10 @@ class SpeechEngine(private val context: Context) {
         val parts = mutableListOf<String>()
         val diagnostics = Diagnostics(context)
         diagnostics.record("Recording bytes=${file.length()} durationSec=${file.length() / 32000.0}")
+        var chunks = 0
+        var peak = 0
+        var active = 0L
+        var totalSamples = 0L
         progress("Carregando modelo de português...")
         Model(modelDir.absolutePath).use { model ->
             progress("Inicializando reconhecimento...")
@@ -53,10 +57,6 @@ class SpeechEngine(private val context: Context) {
                 progress("Transcrevendo gravação...")
                 file.inputStream().buffered().use { input ->
                     val bytes = ByteArray(8192)
-                    var chunks = 0
-                    var peak = 0
-                    var active = 0L
-                    var totalSamples = 0L
                     while (true) {
                         val n = input.read(bytes)
                         if (n < 0) break
