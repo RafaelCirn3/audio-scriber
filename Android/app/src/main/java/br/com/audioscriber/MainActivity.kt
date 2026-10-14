@@ -9,6 +9,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
+import android.content.res.Configuration
+import android.view.WindowManager
 import android.view.Gravity
 import android.widget.*
 import java.io.File
@@ -74,6 +76,10 @@ class MainActivity : Activity() {
         }
         column.addView(result, LinearLayout.LayoutParams(-1, dp(280)))
         setContentView(scroll)
+    }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Mantém a Activity e o áudio ativos ao girar o dispositivo.
     }
     private fun message(text: String) = runOnUiThread { status.text = text }
     private fun refresh() {
@@ -142,6 +148,7 @@ class MainActivity : Activity() {
                 maxOf(minBuffer * 2, 8192))
             check(audio.state == AudioRecord.STATE_INITIALIZED)
             audio.startRecording()
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             recorder = audio
             recording.set(true)
             importedUri = null
@@ -173,17 +180,26 @@ class MainActivity : Activity() {
                     recorder = null
                     recording.set(false)
                     runOnUiThread {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         recordButton.text = "● Grave um áudio"
-                        message("Gravação encerrada.")
+                        if (file.length() == 0L) recordingFile = null
+                        message(if (file.length() > 0L) "Gravação encerrada." else "Gravação vazia; tente novamente.")
                         refresh()
                     }
                 }
             }
-        } catch (exc: Exception) { message("Microfone indisponível: " + exc.message) }
+        } catch (exc: Exception) {
+            recorder?.release()
+            recorder = null
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            message("Microfone indisponível: " + exc.message)
+            refresh()
+        }
     }
     private fun transcribeAudio() {
         if (busy || recording.get() || recorder != null) return
         busy = true
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         refresh()
         message("Preparando transcrição...")
         val sourceFile = recordingFile
@@ -200,6 +216,7 @@ class MainActivity : Activity() {
                     result.setText(text)
                     message(if (text.isBlank()) "Nenhuma fala identificada." else "Transcrição concluída.")
                     busy = false
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     refresh()
                 }
             } catch (exc: Exception) {
@@ -221,6 +238,7 @@ class MainActivity : Activity() {
     }
     override fun onDestroy() {
         recording.set(false)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         executor.shutdown()
         super.onDestroy()
     }
