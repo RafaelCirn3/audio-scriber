@@ -1,0 +1,17 @@
+{
+  "name": "Audio Scriber",
+  "short_name": "Audio Scriber",
+  "description": "Transcrição de áudio para texto",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f5fc",
+  "theme_color": "#155bd7",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
