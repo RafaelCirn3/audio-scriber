@@ -22,6 +22,8 @@ class ModelManager(private val context: Context) {
         val marker = File(model, ".ready")
         if (marker.exists()) return model
         folder.mkdirs()
+        val availableBytes = android.os.StatFs(folder.absolutePath).availableBytes
+        check(availableBytes >= 160L * 1024 * 1024) { "Espaço insuficiente. Libere pelo menos 160 MB para o modelo offline." }
         val zipFile = File(context.cacheDir, "$NAME.zip")
         val tempDir = File(folder, "tmp")
         tempDir.deleteRecursively()
