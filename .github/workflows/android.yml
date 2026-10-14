@@ -51,12 +51,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          TAG="v0.1.1-beta"
+          TAG="v0.1.2-beta"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" AudioScriber-Android-beta.apk AudioScriber-Android-beta.apk.sha256 --clobber
           else
             gh release create "$TAG" AudioScriber-Android-beta.apk AudioScriber-Android-beta.apk.sha256 \
-              --title "Audio Scriber Android v0.1.1-beta" \
+              --title "Audio Scriber Android v0.1.2-beta" \
               --notes "APK Android instalável diretamente no tablet. Versão de testes assinada com chave de depuração do GitHub Actions. A primeira transcrição requer download do modelo de português. Ainda não validada em tablet físico." \
               --prerelease --target "$GITHUB_SHA"
           fi
