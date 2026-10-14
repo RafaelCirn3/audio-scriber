@@ -43,7 +43,13 @@ jobs:
           unzip -t "$SOURCE" >/dev/null
           python3 Android/scripts/prepare_vosk_model.py "$SOURCE" "$MODEL"
           unzip -t "$MODEL" >/dev/null
-      - name: Validate Vosk native model loading and recognition\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 -m pip install --quiet vosk==0.3.45\n          python3 Android/scripts/smoke_test_vosk.py Android/app/src/main/assets/vosk-model-small-pt-0.3.zip\n      - name: Compile APK
+      - name: Validate Vosk native model loading and recognition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet vosk==0.3.45
+          python3 Android/scripts/smoke_test_vosk.py Android/app/src/main/assets/vosk-model-small-pt-0.3.zip
+      - name: Compile APK
         working-directory: Android
         run: gradle --no-daemon --stacktrace assembleDebug
       - name: Verify generated APK
