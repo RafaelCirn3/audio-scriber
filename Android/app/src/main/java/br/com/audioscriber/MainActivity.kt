@@ -24,7 +24,12 @@ class MainActivity : Activity() {
     private var recorder: AudioRecord? = null
     private var recordingFile: File? = null
     private var importedUri: android.net.Uri? = null
-    private var busy = false\n    private val diagnostics by lazy { getSharedPreferences("transcription_diagnostics", MODE_PRIVATE) }\n    private fun stage(value: String) {\n        diagnostics.edit().putString("last_stage", value).putBoolean("unfinished", true).commit()\n        message(value)\n    }
+    private var busy = false
+    private val diagnostics by lazy { getSharedPreferences("transcription_diagnostics", MODE_PRIVATE) }
+    private fun stage(value: String) {
+        diagnostics.edit().putString("last_stage", value).putBoolean("unfinished", true).commit()
+        message(value)
+    }
     private lateinit var recordButton: Button
     private lateinit var importButton: Button
     private lateinit var transcribeButton: Button
@@ -75,7 +80,11 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.WHITE)
         }
         column.addView(result, LinearLayout.LayoutParams(-1, dp(280)))
-        setContentView(scroll)\n        if (diagnostics.getBoolean("unfinished", false)) {\n            val last = diagnostics.getString("last_stage", "etapa desconhecida")\n            message("A transcrição anterior foi interrompida em: $last. Se persistir, informe esta etapa ao desenvolvedor.")\n        }
+        setContentView(scroll)
+        if (diagnostics.getBoolean("unfinished", false)) {
+            val last = diagnostics.getString("last_stage", "etapa desconhecida")
+            message("A transcrição anterior foi interrompida em: $last. Se persistir, informe esta etapa ao desenvolvedor.")
+        }
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -206,12 +215,18 @@ class MainActivity : Activity() {
         val sourceUri = importedUri
         executor.execute {
             try {
-                stage("Preparando modelo offline")\n                val model = ModelManager(this).ensureModel(::stage)
-                message("Transcrevendo no tablet/celular...")
+                stage("Preparando modelo offline")
+                val model = ModelManager(this).ensureModel(::stage)
                 val engine = SpeechEngine(this)
-                val samples = if (sourceFile != null) engine.readRecording(sourceFile)
-                    else engine.readImported(sourceUri ?: error("Áudio não selecionado"))
-                val text = engine.transcribe(model, samples)
+                val text = if (sourceFile != null) {
+                    engine.transcribeRecording(model, sourceFile, ::stage)
+                } else {
+                    stage("Decodificando áudio importado")
+                    val samples = engine.readImported(sourceUri ?: error("Áudio não selecionado"))
+                    stage("Reconhecendo áudio importado")
+                    engine.transcribe(model, samples)
+                }
+                diagnostics.edit().putBoolean("unfinished", false).apply()
                 runOnUiThread {
                     result.setText(text)
                     message(if (text.isBlank()) "Nenhuma fala identificada." else "Transcrição concluída.")
@@ -219,9 +234,10 @@ class MainActivity : Activity() {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     refresh()
                 }
-            } catch (exc: Exception) {
+            } catch (exc: Throwable) {
+                diagnostics.edit().putBoolean("unfinished", false).apply()
                 runOnUiThread {
-                    message("Erro: " + exc.message)
+                    message("Erro: " + (exc.message ?: exc.javaClass.simpleName))
                     busy = false
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     refresh()
