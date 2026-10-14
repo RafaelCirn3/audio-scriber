@@ -229,10 +229,15 @@ class MainActivity : Activity() {
                 val text = if (sourceFile != null) {
                     engine.transcribeRecording(model, sourceFile, ::stage)
                 } else {
-                    stage("Decodificando áudio importado")
-                    val samples = engine.readImported(sourceUri ?: error("Áudio não selecionado"))
-                    stage("Reconhecendo áudio importado")
-                    engine.transcribe(model, samples)
+                    val temporary = File(cacheDir, "imported_transcription.pcm")
+                    try {
+                        stage("Decodificando áudio importado em blocos")
+                        engine.decodeImportedToPcm(sourceUri ?: error("Áudio não selecionado"), temporary, ::stage)
+                        stage("Reconhecendo áudio importado em blocos")
+                        engine.transcribeRecording(model, temporary, ::stage)
+                    } finally {
+                        temporary.delete()
+                    }
                 }
                 diagnostics.edit().putBoolean("unfinished", false).apply()
                 runOnUiThread {
