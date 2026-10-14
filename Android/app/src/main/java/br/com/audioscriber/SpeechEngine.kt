@@ -91,7 +91,7 @@ class SpeechEngine(private val context: Context) {
                 codec.configure(format, null, null, 0)
                 codec.start()
                 val info = MediaCodec.BufferInfo()
-                val collected = ByteArrayOutputStream()
+                val collected = ByteArrayOutputStream()\n                val maxDecodedBytes = minOf(24L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 6)
                 var inputDone = false
                 var outputDone = false
                 var outputFormat = format
@@ -120,7 +120,9 @@ class SpeechEngine(private val context: Context) {
                         else -> if (index >= 0) {
                             idle = 0
                             if (info.size > 0) {
-                                check(collected.size() + info.size <= 180 * 1024 * 1024) { "Arquivo muito grande" }
+                                check(collected.size().toLong() + info.size <= maxDecodedBytes) {
+                                    "Áudio excede o limite de memória desta versão. Divida o arquivo em partes menores."
+                                }
                                 val buffer = codec.getOutputBuffer(index)!!
                                 buffer.position(info.offset)
                                 buffer.limit(info.offset + info.size)
