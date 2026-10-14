@@ -199,7 +199,7 @@ class MainActivity : Activity() {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                         recordButton.text = "● Grave um áudio"
                         if (file.length() == 0L) recordingFile = null
-                        message(if (file.length() > 0L) "Gravação encerrada." else "Gravação vazia; tente novamente.")
+                        message(if (file.length() > 0L) "Gravação encerrada (${file.length() / 32000.0} segundos)." else "Gravação vazia; tente novamente.")
                         refresh()
                     }
                 }
@@ -237,7 +237,7 @@ class MainActivity : Activity() {
                 diagnostics.edit().putBoolean("unfinished", false).apply()
                 runOnUiThread {
                     result.setText(text)
-                    message(if (text.isBlank()) "Nenhuma fala identificada." else "Transcrição concluída.")
+                    message(if (text.isBlank()) "Nenhuma fala reconhecida. Verifique o microfone e copie o diagnóstico para análise." else "Transcrição concluída.")
                     busy = false
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     refresh()
