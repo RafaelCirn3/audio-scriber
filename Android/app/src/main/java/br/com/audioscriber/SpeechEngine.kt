@@ -91,7 +91,8 @@ class SpeechEngine(private val context: Context) {
                 codec.configure(format, null, null, 0)
                 codec.start()
                 val info = MediaCodec.BufferInfo()
-                val collected = ByteArrayOutputStream()\n                val maxDecodedBytes = minOf(24L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 6)
+                val collected = ByteArrayOutputStream()
+                val maxDecodedBytes = minOf(24L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 6)
                 var inputDone = false
                 var outputDone = false
                 var outputFormat = format
