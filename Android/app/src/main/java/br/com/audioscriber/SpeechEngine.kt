@@ -98,6 +98,130 @@ class SpeechEngine(private val context: Context) {
         return ShortArray(pcm.remaining() / 2) { pcm.short }
     }
 
+
+    /**
+     * Decode an imported audio file directly to 16 kHz mono PCM on disk.
+     * Memory stays bounded by the codec's output buffer (no full-file arrays).
+     * Nearest-neighbor resampling prioritizes low memory over fidelity.
+     */
+    fun decodeImportedToPcm(uri: Uri, destination: File, progress: (String) -> Unit) {
+        val diagnostics = Diagnostics(context)
+        val extractor = MediaExtractor()
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r").use { descriptor ->
+                requireNotNull(descriptor) { "Arquivo indisponível" }
+                extractor.setDataSource(descriptor.fileDescriptor)
+            }
+            val track = (0 until extractor.trackCount).firstOrNull {
+                extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+            } ?: error("Arquivo sem faixa de áudio")
+            extractor.selectTrack(track)
+            val format = extractor.getTrackFormat(track)
+            val codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
+            try {
+                codec.configure(format, null, null, 0)
+                codec.start()
+                val info = MediaCodec.BufferInfo()
+                var sourceRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                var inputDone = false
+                var outputDone = false
+                var sourceFrames = 0L
+                var outputFrames = 0L
+                var idle = 0
+                progress("Decodificando em blocos para armazenamento temporário...")
+                destination.outputStream().buffered().use { output ->
+                    val out = ByteArray(8192)
+                    var outPos = 0
+                    while (!outputDone) {
+                        if (!inputDone) {
+                            val index = codec.dequeueInputBuffer(10000)
+                            if (index >= 0) {
+                                val buffer = codec.getInputBuffer(index)!!
+                                buffer.clear()
+                                val size = extractor.readSampleData(buffer, 0)
+                                if (size < 0) {
+                                    codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                    inputDone = true
+                                } else {
+                                    codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
+                                    extractor.advance()
+                                }
+                            }
+                        }
+                        when (val index = codec.dequeueOutputBuffer(info, 10000)) {
+                            MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                                val decoded = codec.outputFormat
+                                sourceRate = decoded.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                                channels = decoded.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                                val encoding = if (decoded.containsKey(MediaFormat.KEY_PCM_ENCODING))
+                                    decoded.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                                else AudioFormat.ENCODING_PCM_16BIT
+                                check(encoding == AudioFormat.ENCODING_PCM_16BIT) { "Codec não retornou PCM de 16 bits" }
+                                check(channels in 1..2 && sourceRate in 8000..192000) { "Formato de áudio não suportado" }
+                                diagnostics.record("Decoder format rate=$sourceRate channels=$channels")
+                            }
+                            MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                                idle++
+                                check(idle < 500) { "Tempo limite de decodificação" }
+                            }
+                            else -> if (index >= 0) {
+                                idle = 0
+                                if (info.size > 0) {
+                                    check(channels in 1..2 && sourceRate in 8000..192000)
+                                    val buffer = codec.getOutputBuffer(index)!!
+                                    buffer.position(info.offset)
+                                    buffer.limit(info.offset + info.size)
+                                    val frameBytes = 2 * channels
+                                    while (buffer.remaining() >= frameBytes) {
+                                        var sum = 0
+                                        repeat(channels) {
+                                            val lo = buffer.get().toInt() and 255
+                                            val hi = buffer.get().toInt()
+                                            sum += ((hi shl 8) or lo).toShort().toInt()
+                                        }
+                                        val sample = (sum / channels).toShort().toInt()
+                                        sourceFrames++
+                                        // Absolute frame counts prevent drift at codec buffer boundaries.
+                                        val desired = sourceFrames * 16000L / sourceRate
+                                        while (outputFrames < desired) {
+                                            out[outPos++] = sample.toByte()
+                                            out[outPos++] = (sample shr 8).toByte()
+                                            if (outPos == out.size) {
+                                                output.write(out, 0, outPos)
+                                                outPos = 0
+                                            }
+                                            outputFrames++
+                                            check(outputFrames <= 16000L * 60 * 15) {
+                                                "Duração máxima de 15 minutos excedida"
+                                            }
+                                        }
+                                    }
+                                    if (sourceFrames % (sourceRate.toLong() * 10) < 4096) {
+                                        diagnostics.record("Decoded frames=$sourceFrames pcmFrames=$outputFrames nativeHeapMB=${android.os.Debug.getNativeHeapAllocatedSize() / 1048576}")
+                                    }
+                                }
+                                outputDone = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                                codec.releaseOutputBuffer(index, false)
+                            }
+                        }
+                    }
+                    if (outPos > 0) output.write(out, 0, outPos)
+                }
+                check(outputFrames > 0) { "Áudio importado vazio" }
+                diagnostics.record("Imported PCM complete frames=$outputFrames")
+            } finally {
+                try { codec.stop() } finally { codec.release() }
+            }
+        } catch (failure: Throwable) {
+            destination.delete()
+            diagnostics.record("Imported audio decode failed", failure)
+            throw failure
+        } finally {
+            extractor.release()
+        }
+    }
+
     fun readImported(uri: Uri): ShortArray {
         val extractor = MediaExtractor()
         try {
