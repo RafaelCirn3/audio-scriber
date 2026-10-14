@@ -1,94 +1,90 @@
 package br.com.audioscriber
 
 import android.content.Context
-import java.io.BufferedInputStream
+import android.os.StatFs
 import java.io.File
-import java.net.URL
-import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
-/** Primeiro uso precisa de internet. Modelo e inferência permanecem 100% locais depois. */
+/**
+ * The Portuguese Vosk model is downloaded and verified at BUILD time.
+ * No network connection is required on the user's device.
+ */
 class ModelManager(private val context: Context) {
     companion object {
         private const val NAME = "vosk-model-small-pt-0.3"
-        private const val URL_MODEL = "https://alphacephei.com/vosk/models/$NAME.zip"
-        private const val SHA256 = "6e1ce909032e1afa7a88e68a3d628ecafff302bdf195befab308826c395e93b7"
+        private const val ASSET = "vosk-model-small-pt-0.3.zip"
         private const val MAX_UNPACKED = 350L * 1024 * 1024
     }
 
-    private fun validModel(dir: File): Boolean =
-        File(dir, "am/final.mdl").isFile &&
-        File(dir, "conf/model.conf").isFile &&
-        File(dir, "graph").isDirectory
+    private fun missing(dir: File): List<String> =
+        listOf("am/final.mdl", "conf/mfcc.conf", "graph").filter {
+            val path = File(dir, it)
+            if (it == "graph") !path.isDirectory else !path.isFile
+        }
 
     fun ensureModel(progress: (String) -> Unit): File {
         val folder = File(context.filesDir, "models")
         val model = File(folder, NAME)
         val marker = File(model, ".ready")
-        if (marker.exists() && validModel(model)) return model
-        if (model.exists()) model.deleteRecursively()
-        folder.mkdirs()
-        val availableBytes = android.os.StatFs(folder.absolutePath).availableBytes
-        check(availableBytes >= 400L * 1024 * 1024) { "Espaço insuficiente. Libere pelo menos 400 MB para o modelo offline." }
-        val zipFile = File(context.cacheDir, "$NAME.zip")
-        val tempDir = File(folder, "tmp")
-        tempDir.deleteRecursively()
-        tempDir.mkdirs()
+        if (marker.isFile && missing(model).isEmpty()) return model
+
+        check(folder.exists() || folder.mkdirs()) { "Não foi possível criar pasta de modelos" }
+        val free = StatFs(folder.absolutePath).availableBytes
+        check(free >= 250L * 1024 * 1024) {
+            "Espaço insuficiente para preparar o modelo offline (250 MB livres necessários)"
+        }
+        val temp = File(folder, "installing")
+        temp.deleteRecursively()
+        check(temp.mkdirs()) { "Não foi possível preparar instalação do modelo" }
         try {
-            progress("Baixando modelo português (primeiro uso)...")
-            val connection = URL(URL_MODEL).openConnection()
-            connection.connectTimeout = 20000
-            connection.readTimeout = 60000
-            val digest = MessageDigest.getInstance("SHA-256")
-            BufferedInputStream(connection.getInputStream()).use { input ->
-                zipFile.outputStream().buffered().use { output ->
-                    val bytes = ByteArray(64 * 1024)
-                    var total = 0L
+            progress("Preparando modelo português incluído no aplicativo...")
+            var unpacked = 0L
+            var entries = 0
+            context.assets.open(ASSET).buffered().use { input ->
+                ZipInputStream(input).use { zip ->
                     while (true) {
-                        val count = input.read(bytes)
-                        if (count == -1) break
-                        total += count
-                        if (total > 80L * 1024 * 1024) error("Download excedeu limite seguro")
-                        digest.update(bytes, 0, count)
-                        output.write(bytes, 0, count)
-                    }
-                }
-            }
-            val actual = digest.digest().joinToString("") { "%02x".format(it) }
-            check(actual == SHA256) { "Checksum do modelo inválido" }
-            progress("Preparando modelo offline...")
-            var totalExpanded = 0L
-            ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
-                while (true) {
-                    val entry = zip.nextEntry ?: break
-                    val target = File(tempDir, entry.name)
-                    check(target.canonicalPath.startsWith(tempDir.canonicalPath + File.separator)) { "Arquivo ZIP inválido" }
-                    if (entry.isDirectory) target.mkdirs()
-                    else {
-                        target.parentFile?.mkdirs()
-                        target.outputStream().use { out ->
-                            val buffer = ByteArray(32 * 1024)
-                            while (true) {
-                                val n = zip.read(buffer)
-                                if (n == -1) break
-                                totalExpanded += n
-                                check(totalExpanded <= MAX_UNPACKED) { "Modelo descompactado excedeu limite" }
-                                out.write(buffer, 0, n)
+                        val entry = zip.nextEntry ?: break
+                        val destination = File(temp, entry.name)
+                        check(destination.canonicalPath.startsWith(temp.canonicalPath + File.separator)) {
+                            "Caminho inválido dentro do pacote do modelo"
+                        }
+                        if (entry.isDirectory) {
+                            check(destination.isDirectory || destination.mkdirs()) { "Falha ao criar diretório" }
+                        } else {
+                            check(destination.parentFile?.isDirectory == true || destination.parentFile?.mkdirs() == true) {
+                                "Falha ao criar diretório do modelo"
+                            }
+                            destination.outputStream().buffered().use { output ->
+                                val bytes = ByteArray(32768)
+                                while (true) {
+                                    val count = zip.read(bytes)
+                                    if (count == -1) break
+                                    unpacked += count
+                                    check(unpacked <= MAX_UNPACKED) { "Modelo excede limite de extração" }
+                                    output.write(bytes, 0, count)
+                                }
                             }
                         }
+                        entries++
+                        zip.closeEntry()
                     }
-                    zip.closeEntry()
                 }
             }
-            val extracted = tempDir.walkTopDown().firstOrNull { it.isDirectory && validModel(it) }
-                ?: error("Pacote do modelo inválido: estrutura Vosk não encontrada")
+            check(entries > 0) { "Modelo incorporado está vazio" }
+            val candidate = temp.walkTopDown().maxDepth(4)
+                .firstOrNull { it.isDirectory && missing(it).isEmpty() }
+                ?: error("Modelo incorporado incompleto: arquivos Vosk essenciais não encontrados")
+            progress("Finalizando instalação offline...")
+            // Do not destroy an existing installation until the replacement is ready.
+            val replacement = File(folder, "prepared")
+            replacement.deleteRecursively()
+            check(candidate.renameTo(replacement)) { "Falha ao preparar modelo" }
             model.deleteRecursively()
-            check(extracted.renameTo(model)) { "Falha ao instalar modelo" }
-            check(marker.createNewFile()) { "Falha ao finalizar instalação" }
+            check(replacement.renameTo(model)) { "Falha ao instalar modelo" }
+            check(File(model, ".ready").createNewFile()) { "Falha ao registrar instalação" }
             return model
         } finally {
-            zipFile.delete()
-            tempDir.deleteRecursively()
+            temp.deleteRecursively()
         }
     }
 }
