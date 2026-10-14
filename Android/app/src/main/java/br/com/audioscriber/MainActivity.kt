@@ -24,7 +24,7 @@ class MainActivity : Activity() {
     private var recorder: AudioRecord? = null
     private var recordingFile: File? = null
     private var importedUri: android.net.Uri? = null
-    private var busy = false
+    private var busy = false\n    private val diagnostics by lazy { getSharedPreferences("transcription_diagnostics", MODE_PRIVATE) }\n    private fun stage(value: String) {\n        diagnostics.edit().putString("last_stage", value).putBoolean("unfinished", true).commit()\n        message(value)\n    }
     private lateinit var recordButton: Button
     private lateinit var importButton: Button
     private lateinit var transcribeButton: Button
@@ -55,7 +55,7 @@ class MainActivity : Activity() {
         column.addView(recordButton)
         column.addView(importButton)
         status = TextView(this).apply {
-            text = "Primeira utilização: download do modelo. Depois funciona offline."
+            text = "Modelo português incluído no aplicativo. Transcrição offline."
             textSize = 15f
             setPadding(0, dp(18), 0, dp(18))
         }
@@ -75,7 +75,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.WHITE)
         }
         column.addView(result, LinearLayout.LayoutParams(-1, dp(280)))
-        setContentView(scroll)
+        setContentView(scroll)\n        if (diagnostics.getBoolean("unfinished", false)) {\n            val last = diagnostics.getString("last_stage", "etapa desconhecida")\n            message("A transcrição anterior foi interrompida em: $last. Se persistir, informe esta etapa ao desenvolvedor.")\n        }
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -206,7 +206,7 @@ class MainActivity : Activity() {
         val sourceUri = importedUri
         executor.execute {
             try {
-                val model = ModelManager(this).ensureModel(::message)
+                stage("Preparando modelo offline")\n                val model = ModelManager(this).ensureModel(::stage)
                 message("Transcrevendo no tablet/celular...")
                 val engine = SpeechEngine(this)
                 val samples = if (sourceFile != null) engine.readRecording(sourceFile)
